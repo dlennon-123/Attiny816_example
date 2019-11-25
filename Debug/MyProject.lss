@@ -15,19 +15,19 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, READONLY
   5 .debug_aranges 000001c8  00000000  00000000  000005a0  2**0
                   CONTENTS, READONLY, DEBUGGING
-  6 .debug_info   00002c86  00000000  00000000  00000768  2**0
+  6 .debug_info   00002cb4  00000000  00000000  00000768  2**0
                   CONTENTS, READONLY, DEBUGGING
-  7 .debug_abbrev 00001ccd  00000000  00000000  000033ee  2**0
+  7 .debug_abbrev 00001ccd  00000000  00000000  0000341c  2**0
                   CONTENTS, READONLY, DEBUGGING
-  8 .debug_line   00000d04  00000000  00000000  000050bb  2**0
+  8 .debug_line   00000d04  00000000  00000000  000050e9  2**0
                   CONTENTS, READONLY, DEBUGGING
-  9 .debug_frame  00000364  00000000  00000000  00005dc0  2**2
+  9 .debug_frame  00000364  00000000  00000000  00005df0  2**2
                   CONTENTS, READONLY, DEBUGGING
- 10 .debug_str    000013e0  00000000  00000000  00006124  2**0
+ 10 .debug_str    00001404  00000000  00000000  00006154  2**0
                   CONTENTS, READONLY, DEBUGGING
- 11 .debug_loc    000008a4  00000000  00000000  00007504  2**0
+ 11 .debug_loc    000008a4  00000000  00000000  00007558  2**0
                   CONTENTS, READONLY, DEBUGGING
- 12 .debug_ranges 00000148  00000000  00000000  00007da8  2**0
+ 12 .debug_ranges 00000148  00000000  00000000  00007dfc  2**0
                   CONTENTS, READONLY, DEBUGGING
 
 Disassembly of section .text:
@@ -358,16 +358,16 @@ void send_data_uart_msg(char *buffer, peripheral_id id, uint16_t data)
  192:	cf 93       	push	r28
  194:	df 93       	push	r29
  196:	ec 01       	movw	r28, r24
-	buffer[0] = DAT_TYPE;
+	buffer[msg_type] = DAT_TYPE;
  198:	84 e4       	ldi	r24, 0x44	; 68
  19a:	88 83       	st	Y, r24
-	buffer[1] = id;
+	buffer[periph_id] = id;
  19c:	69 83       	std	Y+1, r22	; 0x01
-	buffer[2] = (data >> 8);
+	buffer[data_ms_byte] = (data >> 8);
  19e:	5a 83       	std	Y+2, r21	; 0x02
-	buffer[3] = (data & 0x00FF);
+	buffer[data_ls_byte] = (data & 0x00FF);
  1a0:	4b 83       	std	Y+3, r20	; 0x03
-	buffer[4] = calculate_uart_checksum(buffer);
+	buffer[checksum] = calculate_uart_checksum(buffer);
  1a2:	ce 01       	movw	r24, r28
  1a4:	ea df       	rcall	.-44     	; 0x17a <calculate_uart_checksum>
  1a6:	8c 83       	std	Y+4, r24	; 0x04
@@ -395,14 +395,14 @@ void process_uart_command(char *buffer)
  1bc:	ec 01       	movw	r28, r24
 	//perform the command
 	peripheral_id id;
-	id = buffer[1];
+	id = buffer[periph_id];
  1be:	19 81       	ldd	r17, Y+1	; 0x01
-	set_led_by_id(id, buffer[3]);
+	set_led_by_id(id, buffer[data_ls_byte]);
  1c0:	6b 81       	ldd	r22, Y+3	; 0x03
  1c2:	81 2f       	mov	r24, r17
  1c4:	98 df       	rcall	.-208    	; 0xf6 <set_led_by_id>
 	//send a data packet as an ACK
-	send_data_uart_msg(buffer, id, (uint16_t)buffer[3]);
+	send_data_uart_msg(buffer, id, (uint16_t)buffer[data_ls_byte]);
  1c6:	4b 81       	ldd	r20, Y+3	; 0x03
  1c8:	50 e0       	ldi	r21, 0x00	; 0
  1ca:	61 2f       	mov	r22, r17
@@ -535,11 +535,11 @@ void process_uart_request(char *buffer)
  266:	ec 01       	movw	r28, r24
 	uint16_t new_data;
 	//get the data from the peripheral
-	new_data = get_data_from_periph(buffer[1]);
+	new_data = get_data_from_periph(buffer[periph_id]);
  268:	89 81       	ldd	r24, Y+1	; 0x01
  26a:	b6 df       	rcall	.-148    	; 0x1d8 <get_data_from_periph>
 	//send the data
-	send_data_uart_msg(buffer, buffer[1], new_data);
+	send_data_uart_msg(buffer, buffer[periph_id], new_data);
  26c:	ac 01       	movw	r20, r24
  26e:	69 81       	ldd	r22, Y+1	; 0x01
  270:	ce 01       	movw	r24, r28
@@ -755,14 +755,14 @@ int main(void)
 		if(pg_state_change)
 		{
 			//send updated pg message
-			buffer[1] = pg;
+			buffer[periph_id] = pg;
  342:	13 e0       	ldi	r17, 0x03	; 3
 			pg_state_change = 0;
 		}
 		if(sw_state_change)
 		{
 			//send updated sw message, 
-			buffer[1] = sw;
+			buffer[periph_id] = sw;
  344:	06 e0       	ldi	r16, 0x06	; 6
 	PORTC.PIN0CTRL |= (1); //enable rising and falling edge detection PortCPin0
 	PORTA.PIN2CTRL |= (1); //enable rising and falling edge detection PortAPin2
@@ -782,7 +782,7 @@ int main(void)
  358:	31 f0       	breq	.+12     	; 0x366 <main+0x66>
 		{
 			//send updated pg message
-			buffer[1] = pg;
+			buffer[periph_id] = pg;
  35a:	1a 83       	std	Y+2, r17	; 0x02
 			process_uart_request(buffer);
  35c:	ce 01       	movw	r24, r28
@@ -797,7 +797,7 @@ int main(void)
  36c:	61 f3       	breq	.-40     	; 0x346 <main+0x46>
 		{
 			//send updated sw message, 
-			buffer[1] = sw;
+			buffer[periph_id] = sw;
  36e:	0a 83       	std	Y+2, r16	; 0x02
 			process_uart_request(buffer);
  370:	ce 01       	movw	r24, r28

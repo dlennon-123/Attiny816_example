@@ -29,6 +29,15 @@ typedef enum{
 	OUTPUT,
 }pin_type_t;
 
+//Defines a fixed size UART message used by the battery box
+typedef enum{
+	msg_type,      //CMD_TYPE, REQ_TYPE, or DAT_TYP
+	periph_id,     //peripheral_id, see definitions below
+	data_ms_byte,  //most significant data byte
+	data_ls_byte,  //least significant data byte
+	checksum,      //checksum byte
+}uart_msg_fixed_t;
+
 typedef enum{
 	red_led,
 	green_led,
@@ -48,7 +57,7 @@ peripheral_t periphs[(uint8_t) num_periphs] = {
 	{stat1, PORT_C, STAT1, INPUT},
 	{stat2, PORT_C, STAT2, INPUT},
 	{sw, PORT_C, SW, INPUT},
-	};
+};
 
 //Variables to track ISR state changes
 uint8_t sw_state_change = 0;
@@ -102,14 +111,14 @@ int main(void)
 		if(pg_state_change)
 		{
 			//send updated pg message
-			buffer[1] = pg;
+			buffer[periph_id] = pg;
 			process_uart_request(buffer);
 			pg_state_change = 0;
 		}
 		if(sw_state_change)
 		{
 			//send updated sw message, 
-			buffer[1] = sw;
+			buffer[periph_id] = sw;
 			process_uart_request(buffer);
 			sw_state_change = 0;
 		}
@@ -252,10 +261,10 @@ void process_uart_command(char *buffer)
 {
 	//perform the command
 	peripheral_id id;
-	id = buffer[1];
-	set_led_by_id(id, buffer[3]);
+	id = buffer[periph_id];
+	set_led_by_id(id, buffer[data_ls_byte]);
 	//send a data packet as an ACK
-	send_data_uart_msg(buffer, id, (uint16_t)buffer[3]);
+	send_data_uart_msg(buffer, id, (uint16_t)buffer[data_ls_byte]);
 }
 
 /**
@@ -270,9 +279,9 @@ void process_uart_request(char *buffer)
 {
 	uint16_t new_data;
 	//get the data from the peripheral
-	new_data = get_data_from_periph(buffer[1]);
+	new_data = get_data_from_periph(buffer[periph_id]);
 	//send the data
-	send_data_uart_msg(buffer, buffer[1], new_data);
+	send_data_uart_msg(buffer, buffer[periph_id], new_data);
 }
 
 /**
@@ -325,11 +334,11 @@ uint8_t is_vaild_start_byte(uint8_t new_val)
  */
 void send_data_uart_msg(char *buffer, peripheral_id id, uint16_t data)
 {
-	buffer[0] = DAT_TYPE;
-	buffer[1] = id;
-	buffer[2] = (data >> 8);
-	buffer[3] = (data & 0x00FF);
-	buffer[4] = calculate_uart_checksum(buffer);
+	buffer[msg_type] = DAT_TYPE;
+	buffer[periph_id] = id;
+	buffer[data_ms_byte] = (data >> 8);
+	buffer[data_ls_byte] = (data & 0x00FF);
+	buffer[checksum] = calculate_uart_checksum(buffer);
 	
 	USART_0_write_data(buffer, UART_MSG_SIZE);
 }
